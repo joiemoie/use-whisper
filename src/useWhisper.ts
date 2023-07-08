@@ -71,10 +71,6 @@ export const useWhisper: UseWhisperHook = (config) => {
     ...config,
   }
 
-  if (!apiKey && !onTranscribeCallback) {
-    throw new Error('apiKey is required if onTranscribe is not provided')
-  }
-
   const chunks = useRef<Blob[]>([])
   const encoder = useRef<Encoder>()
   const listener = useRef<Harker>()
@@ -432,7 +428,7 @@ export const useWhisper: UseWhisperHook = (config) => {
             const transcribed = await onTranscribeCallback(blob)
             console.log('onTranscribe', transcribed)
             setTranscript(transcribed)
-          } else {
+          } else if (apiKey) {
             const file = new File([blob], 'speech.mp3', { type: 'audio/mpeg' })
             const text = await onWhispered(file)
             console.log('onTranscribing', { text })
@@ -475,10 +471,14 @@ export const useWhisper: UseWhisperHook = (config) => {
           const file = new File([blob], 'speech.mp3', {
             type: 'audio/mpeg',
           })
-          const text = await onWhispered(file)
-          console.log('onInterim', { text })
-          if (text) {
-            setTranscript((prev) => ({ ...prev, text }))
+          if (typeof onDataAvailableCallback === 'function') {
+            onDataAvailableCallback(file)
+          } else if (apiKey) {
+            const text = await onWhispered(file)
+            console.log('onInterim', { text })
+            if (text) {
+              setTranscript((prev) => ({ ...prev, text }))
+            }
           }
         }
       }
@@ -497,32 +497,32 @@ export const useWhisper: UseWhisperHook = (config) => {
    */
   const onWhispered = useMemoAsync(
     async (file: File) => {
-      // Whisper only accept multipart/form-data currently
-      const body = new FormData()
-      body.append('file', file)
-      body.append('model', 'whisper-1')
-      if (mode === 'transcriptions') {
-        body.append('language', whisperConfig?.language ?? 'en')
-      }
-      if (whisperConfig?.prompt) {
-        body.append('prompt', whisperConfig.prompt)
-      }
-      if (whisperConfig?.response_format) {
-        body.append('response_format', whisperConfig.response_format)
-      }
-      if (whisperConfig?.temperature) {
-        body.append('temperature', `${whisperConfig.temperature}`)
-      }
-      const headers: RawAxiosRequestHeaders = {}
-      headers['Content-Type'] = 'multipart/form-data'
       if (apiKey) {
+        // Whisper only accept multipart/form-data currently
+        const body = new FormData()
+        body.append('file', file)
+        body.append('model', 'whisper-1')
+        if (mode === 'transcriptions') {
+          body.append('language', whisperConfig?.language ?? 'en')
+        }
+        if (whisperConfig?.prompt) {
+          body.append('prompt', whisperConfig.prompt)
+        }
+        if (whisperConfig?.response_format) {
+          body.append('response_format', whisperConfig.response_format)
+        }
+        if (whisperConfig?.temperature) {
+          body.append('temperature', `${whisperConfig.temperature}`)
+        }
+        const headers: RawAxiosRequestHeaders = {}
+        headers['Content-Type'] = 'multipart/form-data'
         headers['Authorization'] = `Bearer ${apiKey}`
+        const { default: axios } = await import('axios')
+        const response = await axios.post(whisperApiEndpoint + mode, body, {
+          headers,
+        })
+        return response.data.text
       }
-      const { default: axios } = await import('axios')
-      const response = await axios.post(whisperApiEndpoint + mode, body, {
-        headers,
-      })
-      return response.data.text
     },
     [apiKey, mode, whisperConfig]
   )
