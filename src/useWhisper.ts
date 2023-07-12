@@ -152,6 +152,14 @@ export const useWhisper: UseWhisperHook = (config) => {
     await onStopRecording()
   }
 
+    /**
+   * stop speech recording and start the transcription
+   */
+    const clearChunks = async () => {
+      chunks.current = []
+    }
+  
+
   /**
    * start speech recording event
    * - first ask user for media stream
@@ -431,7 +439,7 @@ export const useWhisper: UseWhisperHook = (config) => {
             console.log({ blob, mp3: mp3.byteLength })
           }
           if (typeof onTranscribeCallback === 'function') {
-            const transcribed = await onTranscribeCallback(blob)
+            const transcribed = await onTranscribeCallback(blob, chunks.current)
             console.log('onTranscribe', transcribed)
             setTranscript(transcribed)
           } else if (apiKey) {
@@ -482,7 +490,7 @@ export const useWhisper: UseWhisperHook = (config) => {
             type: 'audio/mpeg',
           })
           if (typeof onDataAvailableTranscribeCallback === 'function') {
-            const text = await onDataAvailableTranscribeCallback(blob)
+            const text = await onDataAvailableTranscribeCallback(blob, chunks.current)
             console.log('onInterim', { text })
             if (text) {
               setTranscript((prev) => ({ ...prev, text: text.text }))
@@ -549,5 +557,6 @@ export const useWhisper: UseWhisperHook = (config) => {
     pauseRecording,
     startRecording,
     stopRecording,
+    clearChunks,
   }
 }

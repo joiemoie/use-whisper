@@ -10,8 +10,8 @@ export type UseWhisperConfig = {
   timeSlice?: number
   whisperConfig?: WhisperApiConfig
   onDataAvailable?: (blob: Blob) => void
-  onDataAvailableTranscribe?: (blob: Blob) => Promise<UseWhisperTranscript>
-  onTranscribe?: (blob: Blob) => Promise<UseWhisperTranscript>
+  onDataAvailableTranscribe?: (blob: Blob, currentChunks: Blob[]) => Promise<UseWhisperTranscript>
+  onTranscribe?: (blob: Blob, currentChunks: Blob[]) => Promise<UseWhisperTranscript>
 }
 
 export type UseWhisperTimeout = {
