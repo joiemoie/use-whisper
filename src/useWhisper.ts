@@ -317,14 +317,6 @@ export const useWhisper: UseWhisperHook = (config) => {
         onStopStreaming()
         onStopTimeout('stop')
         setRecording(false)
-        if (autoTranscribe) {
-          await onTranscribing()
-        } else {
-          const blob = await recorder.current.getBlob()
-          setTranscript({
-            blob,
-          })
-        }
         await recorder.current.destroy()
         chunks.current = []
         if (encoder.current) {
@@ -369,96 +361,6 @@ export const useWhisper: UseWhisperHook = (config) => {
     }
   }
 
-  const removeSilenceFunction = async (blob: Blob) => {
-    const { createFFmpeg } = await import('@ffmpeg/ffmpeg')
-    const ffmpeg = createFFmpeg({
-      mainName: 'main',
-      corePath: ffmpegCoreUrl,
-      log: true,
-    })
-    if (!ffmpeg.isLoaded()) {
-      await ffmpeg.load()
-    }
-    const buffer = await blob.arrayBuffer()
-    console.log({ in: buffer.byteLength })
-    ffmpeg.FS('writeFile', 'in.wav', new Uint8Array(buffer))
-    await ffmpeg.run(
-      '-i', // Input
-      'in.wav',
-      '-acodec', // Audio codec
-      'libmp3lame',
-      '-b:a', // Audio bitrate
-      '96k',
-      '-ar', // Audio sample rate
-      '44100',
-      '-af', // Audio filter = remove silence from start to end with 2 seconds in between
-      silenceRemoveCommand,
-      'out.mp3' // Output
-    )
-    const out = await ffmpeg.FS('readFile', 'out.mp3')
-    console.log({ out: out.buffer.byteLength })
-    // 225 seems to be empty mp3 file
-    if (out.length <= 225) {
-      ffmpeg.exit()
-      setTranscript({
-        blob,
-      })
-      setTranscribing(false)
-      return blob
-    }
-    let newBlob = new Blob([out.buffer], { type: 'audio/mpeg' })
-    ffmpeg.exit()
-    return newBlob || blob
-  }
-  /**
-   * start Whisper transcrition event
-   * - make sure recorder state is stopped
-   * - set transcribing state to true
-   * - get audio blob from recordrtc
-   * - if config.removeSilence is true, load ffmpeg-wasp and try to remove silence from speec
-   * - if config.customServer is true, send audio data to custom server in base64 string
-   * - if config.customServer is false, send audio data to Whisper api in multipart/form-data
-   * - set transcript object with audio blob and transcription result from Whisper
-   * - set transcribing state to false
-   */
-  const onTranscribing = async () => {
-    console.log('transcribing speech')
-    try {
-      if (encoder.current && recorder.current) {
-        const recordState = await recorder.current.getState()
-        if (recordState === 'stopped') {
-          setTranscribing(true)
-          let blob = await recorder.current.getBlob()
-          if (removeSilence) {
-            blob = await removeSilenceFunction(blob)
-          } else {
-            const buffer = await blob.arrayBuffer()
-            console.log({ wav: buffer.byteLength })
-            const mp3 = encoder.current.encodeBuffer(new Int16Array(buffer))
-            blob = new Blob([mp3], { type: 'audio/mpeg' })
-            console.log({ blob, mp3: mp3.byteLength })
-          }
-          if (typeof onTranscribeCallback === 'function') {
-            const transcribed = await onTranscribeCallback(blob, chunks.current)
-            console.log('onTranscribe', transcribed)
-            setTranscript(transcribed)
-          } else if (apiKey) {
-            const file = new File([blob], 'speech.mp3', { type: 'audio/mpeg' })
-            const text = await onWhispered(file)
-            console.log('onTranscribing', { text })
-            setTranscript({
-              blob,
-              text,
-            })
-          }
-          setTranscribing(false)
-        }
-      }
-    } catch (err) {
-      console.info(err)
-      setTranscribing(false)
-    }
-  }
 
   /**
    * Get audio data in chunk based on timeSlice
@@ -471,83 +373,11 @@ export const useWhisper: UseWhisperHook = (config) => {
     try {
       if (streaming && recorder.current) {
         onDataAvailableCallback?.(data)
-        if (encoder.current) {
-          const buffer = await data.arrayBuffer()
-          const mp3chunk = encoder.current.encodeBuffer(new Int16Array(buffer))
-          const mp3blob = new Blob([mp3chunk], { type: 'audio/mpeg' })
-          chunks.current.push(mp3blob)
-        }
-        const recorderState = await recorder.current.getState()
-        if (recorderState === 'recording') {
-          let blob = new Blob(chunks.current, {
-            type: 'audio/mpeg',
-          })
-
-          if (removeSilence) {
-            blob = await removeSilenceFunction(blob)
-          }
-          const file = new File([blob], 'speech.mp3', {
-            type: 'audio/mpeg',
-          })
-          if (typeof onDataAvailableTranscribeCallback === 'function') {
-            const text = await onDataAvailableTranscribeCallback(blob, chunks.current)
-            console.log('onInterim', { text })
-            if (text) {
-              setTranscript((prev) => ({ ...prev, text: text.text }))
-            }
-          } else if (apiKey) {
-            const text = await onWhispered(file)
-            console.log('onInterim', { text })
-            if (text) {
-              setTranscript((prev) => ({ ...prev, text }))
-            }
-          }
-        }
       }
     } catch (err) {
       console.error(err)
     }
   }
-
-  /**
-   * Send audio file to Whisper to be transcribed
-   * - create formdata and append file, model, and language
-   * - append more Whisper config if whisperConfig is provided
-   * - add OpenAPI Token to header Authorization Bearer
-   * - post with axios to OpenAI Whisper transcript endpoint
-   * - return transcribed text result
-   */
-  const onWhispered = useMemoAsync(
-    async (file: File) => {
-      if (apiKey) {
-        // Whisper only accept multipart/form-data currently
-        const body = new FormData()
-        body.append('file', file)
-        body.append('model', 'whisper-1')
-        if (mode === 'transcriptions') {
-          body.append('language', whisperConfig?.language ?? 'en')
-        }
-        if (whisperConfig?.prompt) {
-          body.append('prompt', whisperConfig.prompt)
-        }
-        if (whisperConfig?.response_format) {
-          body.append('response_format', whisperConfig.response_format)
-        }
-        if (whisperConfig?.temperature) {
-          body.append('temperature', `${whisperConfig.temperature}`)
-        }
-        const headers: RawAxiosRequestHeaders = {}
-        headers['Content-Type'] = 'multipart/form-data'
-        headers['Authorization'] = `Bearer ${apiKey}`
-        const { default: axios } = await import('axios')
-        const response = await axios.post(whisperApiEndpoint + mode, body, {
-          headers,
-        })
-        return response.data.text
-      }
-    },
-    [apiKey, mode, whisperConfig]
-  )
 
   return {
     recording,
