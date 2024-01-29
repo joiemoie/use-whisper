@@ -180,7 +180,7 @@ export const useWhisper: UseWhisperHook = (config) => {
             default: { RecordRTCPromisesHandler, StereoAudioRecorder },
           } = await import('recordrtc')
           const recorderConfig: Options = {
-            mimeType: 'audio/ogg',
+            mimeType: 'audio/wav',
             numberOfAudioChannels: 1, // mono
             recorderType: StereoAudioRecorder,
             sampleRate: 44100, // Sample rate = 44.1khz
@@ -372,7 +372,14 @@ export const useWhisper: UseWhisperHook = (config) => {
     console.log('onDataAvailable', data)
     try {
       if (streaming && recorder.current) {
-        onDataAvailableCallback?.(data)
+        if (encoder.current) {
+          const buffer = await data.arrayBuffer()
+          const mp3chunk = encoder.current.encodeBuffer(new Int16Array(buffer))
+          const mp3blob = new Blob([mp3chunk], { type: 'audio/mpeg' })
+          onDataAvailableCallback?.(mp3blob)
+        } else {
+          onDataAvailableCallback?.(data)
+        }
       }
     } catch (err) {
       console.error(err)
