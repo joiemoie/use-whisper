@@ -372,14 +372,15 @@ export const useWhisper: UseWhisperHook = (config) => {
     console.log('onDataAvailable', data)
     try {
       if (streaming && recorder.current) {
-        if (encoder.current) {
-          const buffer = await data.arrayBuffer()
-          const mp3chunk = encoder.current.encodeBuffer(new Int16Array(buffer))
-          const mp3blob = new Blob([mp3chunk], { type: 'audio/mpeg' })
-          onDataAvailableCallback?.(mp3blob)
-        } else {
-          onDataAvailableCallback?.(data)
-        }
+        // if (encoder.current) {
+        //   const buffer = await data.arrayBuffer()
+        //   const mp3chunk = encoder.current.encodeBuffer(new Int16Array(buffer))
+        //   const mp3blob = new Blob([mp3chunk], { type: 'audio/mpeg' })
+        //   onDataAvailableCallback?.(mp3blob)
+        // } else {
+        //   onDataAvailableCallback?.(data)
+        // }
+        onDataAvailableCallback?.(data)
       }
     } catch (err) {
       console.error(err)
