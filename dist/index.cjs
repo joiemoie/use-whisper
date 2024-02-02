@@ -2,13 +2,13 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-var chunkCYIFGQH3_cjs = require('./chunk-CYIFGQH3.cjs');
+var chunkOB7FAIQJ_cjs = require('./chunk-OB7FAIQJ.cjs');
 require('./chunk-57AVKP4H.cjs');
 
-var o=chunkCYIFGQH3_cjs.a;
+var o=chunkOB7FAIQJ_cjs.a;
 
 Object.defineProperty(exports, 'useWhisper', {
 	enumerable: true,
-	get: function () { return chunkCYIFGQH3_cjs.a; }
+	get: function () { return chunkOB7FAIQJ_cjs.a; }
 });
 exports.default = o;
